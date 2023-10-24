@@ -65,32 +65,88 @@ void renderPixel(int x, int y, bool pixel) {
 }
 
 // Main program
+
+float stableWeight = 0;
+float candidate = 0; // candidate for a new stable weight
+unsigned long candidateWhen = 0;
+#define MAX_THINGS 128
+float things[MAX_THINGS];
+int numThings = 0;
+
 void setup() {
   setupSerial();
   setupDisplay();
   setupScale();
+  stableWeight = scale.get_units(1);
 }
 
 void loop() {
-  // Serial.println("Test");
-  // display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+  unsigned long now = millis();
+  float weight = scale.get_units(1);
+
+  update(now, weight);
 
   clearPixels();
-  renderBox(1, 1);
-  renderBox(4, 3);
   // renderText(15, 0, "0123456789");
   // renderText(15, 0, "Gewicht: 2g");
-  renderText(15, 0, "Rucksack");
-  // renderText(15, 0, String(scale.get_units(1)));
+  // renderText(8, 0, "Rucksack");
+  String s = "";
+  for (int i = 0; i < numThings; i++) {
+    s += (i == 0 ? "" : ",\x1") + String(round(things[i]));
+  }
+  float fluctuation = weight - stableWeight;
+  s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation)) + "g";
+  // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
+  renderText(1, 0, s);
   pushPixelsToDisplay();
+}
 
-  // clear old graphic
-  // for (uint8_t i=0; i<DATA_WIDTH; i++)
-  //   display.setColumn(idx-DATA_WIDTH+i, 0);
-  // for (uint8_t i=0; i < 64; i++)
-  //   display.setColumn(columnMapping[i], i);
+void update(unsigned long now, float weight) {
+  if (abs(weight - candidate) > 5) {
+    // This is a bad candidate, it didn't last for a second.
+    candidate = weight;
+    candidateWhen = now;
+    return;
+  }
+  
+  if (now - candidateWhen < 1000) {
+    // Wait some more time to see if something disproves the candidate.
+    return;
+  }
 
-  // display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+  // The candidate was good for one whole second.
+  // Let's pick it!
+  float delta = candidate - stableWeight;
+  stableWeight = candidate;
+  candidate = weight;
+  candidateWhen = now;
 
-  Serial.println(scale.get_units(1));
+  // We now that the delta was put on (or removed from) the scale.
+  if (abs(delta) < 10) {
+    // Just fluctuation. Perhaps the load cell slightly shifts over time because of temperature changes.
+    return;
+  }
+
+  Serial.println(String(delta) + " put on the scale.");
+
+  if (delta > 0) {
+    // Something was put on the scale.
+    if (numThings > MAX_THINGS) {
+      return; // Too bad.
+    }
+    things[numThings] = delta;
+    numThings++;
+  } else {
+    // Something was taken from the scale.
+    float removed = -delta;
+    int thing = -1;
+    for (int i = 0; i < numThings; i++)
+      if (thing == -1 || abs(things[i] - removed) < abs(things[thing] - removed))
+        thing = i;
+    if (thing == -1) return; // Nothing was on the scale.
+
+    for (int i = thing + 1; i < numThings; i++)
+      things[i - 1] = things[i];
+    numThings--;
+  }
 }

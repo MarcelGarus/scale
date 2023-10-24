@@ -66,6 +66,13 @@ int renderChar(int x, int y, char c) {
                        0b00011100)
     CHAR_PIXELS_1(':', 0b01000100)
     CHAR_PIXELS_1('.', 0b01000000)
+    CHAR_PIXELS_2(',', 0b10000000,
+                       0b01000000)
+    CHAR_PIXELS_5('+', 0b00001000,
+                       0b00001000,
+                       0b00111110,
+                       0b00001000,
+                       0b00001000)
     CHAR_PIXELS_2('-', 0b00001000,
                        0b00001000)
     CHAR_PIXELS_1(' ', 0b00000000)
@@ -109,6 +116,21 @@ int renderChar(int x, int y, char c) {
                        0b01001001,
                        0b01001001,
                        0b00111110)
+
+    // We want some special characters that are not part of ASCII.
+    // Here, we (mis)use some of the ASCII code points for our needs.
+
+    // thin space
+    case 0x01:
+      return 0;
+    // fat minus (same width as plus)
+    CHAR_PIXELS_5(0x02,
+      0b00001000,
+      0b00001000,
+      0b00001000,
+      0b00001000,
+      0b00001000)
+
     default:
       RENDER_COL(0, 0b1111111);
       RENDER_COL(1, 0b1111111);
