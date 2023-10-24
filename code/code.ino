@@ -53,7 +53,7 @@ void pushPixelsToDisplay() {
   display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 void clearPixels() {
-  for (int i = 0; i < DISPLAY_WIDTH; i++) pixels[i] = 0;
+  for (int i = 0; i < DISPLAY_WIDTH; i++) pixels[i] = 0b00000000;
 }
 void renderPixel(int x, int y, bool pixel) {
   if (x < 0 || x >= DISPLAY_WIDTH) return;
@@ -62,6 +62,18 @@ void renderPixel(int x, int y, bool pixel) {
     *(pixels + x) |= 1 << (7 - y); // something like 0b00010000
   else
     *(pixels + x) &= (1 << (7 - y)) ^ 0xFF; // something like 0b11101111
+}
+void shiftPixels() {
+  double t = 1.2 * double(millis() % 2000) / 1000.;
+  for (int x = 0; x < DISPLAY_WIDTH; x++) {
+    double a = 0.2 * (double(x - DISPLAY_WIDTH / 2) - 50. * t);
+    double shiftA = 4. * pow(2., -5. * t) * pow(2., -a*a);
+
+    double b = 0.2 * (double(DISPLAY_WIDTH / 2 - x) - 50. * t);
+    double shiftB = 4. * pow(2., -5. * t) * pow(2., -b*b);
+
+    pixels[x] = pixels[x] >> int(max(shiftA, shiftB));
+  }
 }
 
 // Main program
@@ -97,7 +109,9 @@ void loop() {
   float fluctuation = weight - stableWeight;
   s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation)) + "g";
   // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
-  renderText(1, 0, s);
+  // renderText(1, 0, s);
+  renderText(1, 0, "Rucksack");
+  // shiftPixels();
   pushPixelsToDisplay();
 }
 
