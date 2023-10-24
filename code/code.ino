@@ -1,6 +1,3 @@
-// Use the MD_MAX72XX library to display a Pacman animation
-// Just for fun!
-
 #include <MD_MAX72xx.h>
 #include <HX711.h>
 #include <SPI.h>
@@ -45,6 +42,28 @@ void setupScale() {
   scale.set_scale(208.319824);
 }
 
+// Rendering
+#define DISPLAY_WIDTH 64
+uint8_t pixels[DISPLAY_WIDTH];
+
+void pushPixelsToDisplay() {
+  display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+  for (int i = 0; i < DISPLAY_WIDTH; i++)
+    display.setColumn(columnMapping[i], pixels[i]);
+  display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+}
+void clearPixels() {
+  for (int i = 0; i < DISPLAY_WIDTH; i++) pixels[i] = 0;
+}
+void renderPixel(int x, int y, bool pixel) {
+  if (x < 0 || x >= DISPLAY_WIDTH) return;
+  if (y < 0 || y >= 8) return;
+  if (pixel)
+    *(pixels + x) |= 1 << (7 - y); // something like 0b00010000
+  else
+    *(pixels + x) &= (1 << (7 - y)) ^ 0xFF; // something like 0b11101111
+}
+
 // Main program
 void setup() {
   setupSerial();
@@ -54,15 +73,24 @@ void setup() {
 
 void loop() {
   // Serial.println("Test");
-  display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+  // display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+
+  clearPixels();
+  renderBox(1, 1);
+  renderBox(4, 3);
+  renderText(15, 0, "0123456789");
+  // renderText(15, 0, "Gewicht: 2g");
+  // renderText(15, 0, "Kilogram");
+  // renderText(15, 0, String(scale.get_units(1)));
+  pushPixelsToDisplay();
 
   // clear old graphic
   // for (uint8_t i=0; i<DATA_WIDTH; i++)
   //   display.setColumn(idx-DATA_WIDTH+i, 0);
-  for (uint8_t i=0; i < 64; i++)
-    display.setColumn(columnMapping[i], i);
+  // for (uint8_t i=0; i < 64; i++)
+  //   display.setColumn(columnMapping[i], i);
 
-  display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+  // display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 
   Serial.println(scale.get_units(1));
 }
