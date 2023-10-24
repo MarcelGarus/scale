@@ -110,7 +110,10 @@ void loop() {
   s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation)) + "g";
   // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
   // renderText(1, 0, s);
-  renderText(1, 0, "Rucksack");
+  // renderText(1, 0, "iPad \x3, 900ml Wasser");
+  // int len = renderSmolText(1, int(fluctuation / 10.), "KAL?");
+  renderTinyText(0, 0, "123456789");
+  renderTinyText(0, 5, String(weight));
   // shiftPixels();
   pushPixelsToDisplay();
 }
@@ -122,7 +125,7 @@ void update(unsigned long now, float weight) {
     candidateWhen = now;
     return;
   }
-  
+
   if (now - candidateWhen < 1000) {
     // Wait some more time to see if something disproves the candidate.
     return;
