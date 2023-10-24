@@ -78,9 +78,9 @@ void loop() {
   clearPixels();
   renderBox(1, 1);
   renderBox(4, 3);
-  renderText(15, 0, "0123456789");
+  // renderText(15, 0, "0123456789");
   // renderText(15, 0, "Gewicht: 2g");
-  // renderText(15, 0, "Kilogram");
+  renderText(15, 0, "Rucksack");
   // renderText(15, 0, String(scale.get_units(1)));
   pushPixelsToDisplay();
 
