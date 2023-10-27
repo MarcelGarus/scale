@@ -3,13 +3,18 @@
 #include <SPI.h>
 
 // First display: MD_MAX72XX
-#define DISPLAY_CLK_PIN   13  // or SCK
-#define DISPLAY_DATA_PIN  11  // or MOSI
-#define DISPLAY_CS_PIN    10  // or SS
+#define DISPLAY_1_CLK_PIN   13
+#define DISPLAY_1_DATA_PIN  12
+#define DISPLAY_1_CS_PIN    11
+
+// Second display: MD_MAX72XX
+#define DISPLAY_2_CLK_PIN   10
+#define DISPLAY_2_DATA_PIN  9
+#define DISPLAY_2_CS_PIN    8
 
 // Load cell: HX711
-#define LC_DATA_PIN 7
-#define LC_CLOCK_PIN 8
+#define LC_DATA_PIN 6
+#define LC_CLOCK_PIN 7
 
 // Serial
 void setupSerial() {
@@ -19,18 +24,19 @@ void setupSerial() {
 }
 
 // Display
-MD_MAX72XX display = MD_MAX72XX(MD_MAX72XX::PAROLA_HW, DISPLAY_CS_PIN, 12);
-const uint8_t columnMapping[64] = {7,6,5,4,3,2,1,0,           15,14,13,12,11,10,9,8,    23,22,21,20,19,18,17,16,  31,30,29,28,27,26,25,24,
-                                   39,38,37,36,35,34,33,32,   47,46,45,44,43,42,41,40,  55,54,53,52,51,50,49,48,  63,62,61,60,59,58,57,56};
+MD_MAX72XX display1 = MD_MAX72XX(MD_MAX72XX::PAROLA_HW, DISPLAY_1_DATA_PIN, DISPLAY_1_CLK_PIN, DISPLAY_1_CS_PIN, 12);
+MD_MAX72XX display2 = MD_MAX72XX(MD_MAX72XX::PAROLA_HW, DISPLAY_2_DATA_PIN, DISPLAY_2_CLK_PIN, DISPLAY_2_CS_PIN, 12);
 
-void resetDisplay() {
-  display.control(MD_MAX72XX::INTENSITY, MAX_INTENSITY/2);
-  display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-  display.clear();
-}
-void setupDisplay() {
-  display.begin();
-  resetDisplay();
+void setupDisplays() {
+  display1.begin();
+  display1.control(MD_MAX72XX::INTENSITY, MAX_INTENSITY);
+  display1.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+  display1.clear();
+
+  display2.begin();
+  display2.control(MD_MAX72XX::INTENSITY, 0x0);
+  display2.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+  display2.clear();
 }
 
 // Scale
@@ -43,14 +49,19 @@ void setupScale() {
 }
 
 // Rendering
-#define DISPLAY_WIDTH 64
+#define DISPLAY_WIDTH 128
 uint8_t pixels[DISPLAY_WIDTH];
 
-void pushPixelsToDisplay() {
-  display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-  for (int i = 0; i < DISPLAY_WIDTH; i++)
-    display.setColumn(columnMapping[i], pixels[i]);
-  display.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+void pushPixelsToDisplays() {
+  display1.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+  for (int i = 0; i < DISPLAY_WIDTH / 2; i++)
+    display1.setColumn(i / 8 * 8 + 7 - (i % 8), pixels[i]);
+  display1.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+
+  display2.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+  for (int i = DISPLAY_WIDTH / 2; i < DISPLAY_WIDTH; i++)
+    display2.setColumn(i % (DISPLAY_WIDTH / 2) / 8 * 8 + 7 - (i % 8), pixels[i]);
+  display2.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 void clearPixels() {
   for (int i = 0; i < DISPLAY_WIDTH; i++) pixels[i] = 0b00000000;
@@ -87,7 +98,7 @@ int numThings = 0;
 
 void setup() {
   setupSerial();
-  setupDisplay();
+  setupDisplays();
   setupScale();
   stableWeight = scale.get_units(1);
 }
@@ -109,13 +120,14 @@ void loop() {
   float fluctuation = weight - stableWeight;
   s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation)) + "g";
   // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
-  // renderText(1, 0, s);
+  s += " and some more text";
+  renderText(1, 0, s);
   // renderText(1, 0, "iPad \x3, 900ml Wasser");
   // int len = renderSmolText(1, int(fluctuation / 10.), "KAL?");
-  renderTinyText(0, 0, "123456789");
-  renderTinyText(0, 5, String(weight));
+  // renderTinyText(0, 0, "123456789");
+  // renderTinyText(0, 5, String(weight));
   // shiftPixels();
-  pushPixelsToDisplay();
+  pushPixelsToDisplays();
 }
 
 void update(unsigned long now, float weight) {
