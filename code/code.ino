@@ -4,34 +4,32 @@
 #include <HX711.h>
 #include <SPI.h>
 
-// Cable colors:
-// - red: positive
-// - brown/blue: ground/negative
-// - green: display clock
-// - yellow: display control (CS)
-// - orange: display data
-
-// First display: MD_MAX72XX
+// Displays: MD_MAX72XX
 #define DISPLAY_LEFT_CLK_PIN   10
 #define DISPLAY_LEFT_DATA_PIN  8
 #define DISPLAY_LEFT_CS_PIN    9
+#define DISPLAY_RIGHT_CLK_PIN  13
+#define DISPLAY_RIGHT_DATA_PIN 11
+#define DISPLAY_RIGHT_CS_PIN   12
 
-// Second display: MD_MAX72XX
-#define DISPLAY_RIGHT_CLK_PIN   13
-#define DISPLAY_RIGHT_DATA_PIN  11
-#define DISPLAY_RIGHT_CS_PIN    12
-
-// Load cell front left: HX711
-#define LC_FRONT_LEFT_DATA_PIN 2
-#define LC_FRONT_LEFT_SCK_PIN 3
-
-// Load cell front right: HX711
+// Load cells: HX711
+#define LC_FRONT_LEFT_DATA_PIN  2
+#define LC_FRONT_LEFT_SCK_PIN   3
 #define LC_FRONT_RIGHT_DATA_PIN 4
-#define LC_FRONT_RIGHT_SCK_PIN 5
+#define LC_FRONT_RIGHT_SCK_PIN  5
+#define LC_BACK_LEFT_DATA_PIN   A0
+#define LC_BACK_LEFT_SCK_PIN    A1
+#define LC_BACK_RIGHT_DATA_PIN  A2
+#define LC_BACK_RIGHT_SCK_PIN   A3
 
-// Load cells back: 2x HX711
-#define LC_BACK_DATA_PIN 6
-#define LC_BACK_SCK_PIN 7
+void setup_pins() {
+  // Because of pin shortage, we use some analog pins as digital pins.
+  // https://forum.arduino.cc/t/arduino-uno-using-analog-input-as-digital-in-out/143837
+  pinMode(A0, INPUT_PULLUP);
+  pinMode(A1, INPUT_PULLUP);
+  pinMode(A2, INPUT_PULLUP);
+  pinMode(A3, INPUT_PULLUP);
+}
 
 // Serial
 void setup_serial() {
@@ -61,18 +59,22 @@ void setup_displays() {
 // Load cells
 HX711 lc_front_left;
 HX711 lc_front_right;
-HX711 lc_back;
+HX711 lc_back_left;
+HX711 lc_back_right;
 
-void setup_scales() {
+void setup_load_cells() {
   lc_front_left.begin(LC_FRONT_LEFT_DATA_PIN, LC_FRONT_LEFT_SCK_PIN);
   lc_front_left.set_offset(-19500);
   lc_front_left.set_scale(200.8);
   lc_front_right.begin(LC_FRONT_RIGHT_DATA_PIN, LC_FRONT_RIGHT_SCK_PIN);
   lc_front_right.set_offset(90200);
   lc_front_right.set_scale(200.8);
-  lc_back.begin(LC_BACK_DATA_PIN, LC_BACK_SCK_PIN);
-  lc_back.set_offset(-208000);
-  lc_back.set_scale(100.4);
+  lc_back_left.begin(LC_BACK_LEFT_DATA_PIN, LC_BACK_LEFT_SCK_PIN);
+  lc_back_left.set_offset(-162800);
+  lc_back_left.set_scale(187.4);
+  lc_back_right.begin(LC_BACK_RIGHT_DATA_PIN, LC_BACK_RIGHT_SCK_PIN);
+  lc_back_right.set_offset(-245700);
+  lc_back_right.set_scale(200.8);
 }
 
 // Rendering
@@ -139,27 +141,28 @@ void shift_pixels() {
 struct Weight {
   float front_left;
   float front_right;
+  float back_left;
+  float back_right;
 
-  float total() { return front_left + front_right; }
+  float total() { return front_left + front_right + back_left + back_right; }
   Weight diff_to(Weight goal) {
     Weight res;
     res.front_left = goal.front_left - front_left;
     res.front_right = goal.front_right - front_right;
+    res.back_left = goal.back_left - back_left;
+    res.back_right = goal.back_right - back_right;
     return res;
   }
-  float center_of_mass_x() { return front_right / total(); }
+  // 0 = left, 1 = right
+  float center_of_mass_x() { return (front_right + back_right) / total(); }
+  // 0 = front, 1 = back
+  float center_of_mass_y() { return (back_left + back_right) / total(); }
 };
 typedef struct Weight Weight;
 
-struct Weight measure() {
-  Weight w;
-  w.front_left = lc_front_left.get_units(1);
-  w.front_right = lc_front_right.get_units(1);
-  return w;
-}
-
 // Main program.
 
+Weight current;
 Weight stable;
 Weight candidate;
 unsigned long candidate_when = 0;
@@ -169,10 +172,45 @@ float things[MAX_THINGS];
 int num_things = 0;
 
 void setup() {
+  setup_pins();
   setup_serial();
   setup_displays();
-  setup_scales();
-  stable = measure();
+  setup_load_cells();
+
+  lc_front_left.wait_ready(1);
+  lc_front_right.wait_ready(1);
+  lc_back_left.wait_ready(1);
+  lc_back_right.wait_ready(1);
+  update_current();
+  stable = current;
+}
+
+void update_current() {
+  // unsigned long time_a = millis();
+
+  // Serial.print("Measuring front left...  ");
+  if (lc_front_left.is_ready())
+    current.front_left = lc_front_left.get_units(1);
+  // unsigned long time_b = millis();
+  // Serial.println("took " + String(time_b - time_a) + " ms.");
+
+  // Serial.print("Measuring front right... ");
+  if (lc_front_right.is_ready())
+    current.front_right = lc_front_right.get_units(1);
+  // unsigned long time_c = millis();
+  // Serial.println("took " + String(time_c - time_b) + " ms.");
+
+  // Serial.print("Measuring back left...   ");
+  if (lc_back_left.is_ready())
+    current.back_left = lc_back_left.get_units(1);
+  // unsigned long time_d = millis();
+  // Serial.println("took " + String(time_d - time_c) + " ms.");
+
+  // Serial.print("Measuring back right...  ");
+  if (lc_back_right.is_ready())
+    current.back_right = lc_back_right.get_units(1);
+  // unsigned long time_e = millis();
+  // Serial.println("took " + String(time_e - time_d) + " ms.");
 }
 
 void loop() {
@@ -185,8 +223,8 @@ void loop() {
 
   // return;
 
-  Weight weight = measure();
-  update(now, weight);
+  update_current();
+  update(now);
 
   clear_pixels();
   // render_text(15, 0, "0123456789");
@@ -196,28 +234,28 @@ void loop() {
   for (int i = 0; i < num_things; i++) {
     s += (i == 0 ? "" : "+") + String(round(things[i]));
   }
-  float fluctuation = stable.diff_to(weight).total();
+  float fluctuation = stable.diff_to(current).total();
   s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation));
   // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
-  render_smol_text(1, 2, s);
+  // render_smol_text(1, 2, s);
   // render_smol_text(1, 0, "RUCKSACK, LAPTOP, IPAD, 900ML WASSER");
   // int len = render_smol_text(1, int(fluctuation / 10.), "KAL?");
   // render_tiny_text(0, 0, "123456789");
-  // render_smol_text(1, 2, String(weight.total()));
+  render_smol_text(1, 2, String(current.total()));
 
   if (fluctuation > 5) {
-    render_pixel(int(stable.diff_to(weight).center_of_mass_x() * DISPLAY_WIDTH), 0, true);
+    render_pixel(int(stable.diff_to(current).center_of_mass_x() * DISPLAY_WIDTH), 0, true);
   }
   // shift_pixels();
   show_pixels();
 }
 
-void update(unsigned long now, Weight weight) {
-  Weight delta = stable.diff_to(weight);
+void update(unsigned long now) {
+  Weight delta = stable.diff_to(current);
 
-  if (abs(candidate.diff_to(weight).total()) > 5) {
+  if (abs(candidate.diff_to(current).total()) > 5) {
     // This is a bad candidate, it didn't last for a second.
-    candidate = weight;
+    candidate = current;
     candidate_when = now;
     return;
   }
@@ -230,7 +268,7 @@ void update(unsigned long now, Weight weight) {
   // The candidate was good for one whole second.
   // Let's pick it!
   stable = candidate;
-  candidate = weight;
+  candidate = current;
   candidate_when = now;
 
   // We know that the delta was put on (or removed from) the scale.
@@ -241,7 +279,7 @@ void update(unsigned long now, Weight weight) {
 
   Serial.println(String(delta.total()) + " put on the scale.");
 
-  if (abs(delta.total()) > 0) {
+  if (delta.total() > 0) {
     // Something was put on the scale.
     if (num_things > MAX_THINGS) {
       return; // Too bad.
