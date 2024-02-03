@@ -1,15 +1,15 @@
-void renderBox(int x, int y) {
-  renderPixel(x, y, true);
-  renderPixel(x, y + 1, true);
-  renderPixel(x + 1, y, true);
-  renderPixel(x + 1, y + 1, true);
+void render_box(int x, int y) {
+  render_pixel(x, y, true);
+  render_pixel(x, y + 1, true);
+  render_pixel(x + 1, y, true);
+  render_pixel(x + 1, y + 1, true);
 }
-void renderColumn(int x, int y, uint8_t column) {
+void render_column(int x, int y, uint8_t column) {
   for (int i = 0; i < 8; i++)
-    renderPixel(x, y + i, column >> i & 1);
+    render_pixel(x, y + i, column >> i & 1);
 }
-int renderChar(int x, int y, char c) {
-  #define RENDER_COL(n, col) renderColumn(x + n, y, col);
+int render_char(int x, int y, char c) {
+  #define RENDER_COL(n, col) render_column(x + n, y, col);
   #define CHAR_PIXELS_1(ch, col0) case ch: RENDER_COL(0, col0); return 1;
   #define CHAR_PIXELS_2(ch, col0, col1) case ch: RENDER_COL(0, col0); RENDER_COL(1, col1); return 2;
   #define CHAR_PIXELS_3(ch, col0, col1, col2) case ch: RENDER_COL(0, col0); RENDER_COL(1, col1); RENDER_COL(2, col2); return 3;
@@ -174,20 +174,20 @@ int renderChar(int x, int y, char c) {
       return 4;
   }
 }
-int renderText(int x, int y, String text) {
+int render_text(int x, int y, String text) {
   for (int i = 0; i < text.length(); i++) {
     if (i > 0) x += 1;
-    x += renderChar(x, y, text[i]);
+    x += render_char(x, y, text[i]);
   }
   return x;
 }
 
-void renderSmolColumn(int x, int y, uint8_t column) {
+void render_smol_column(int x, int y, uint8_t column) {
   for (int i = 0; i < 5; i++)
-    renderPixel(x, y + i, column >> i & 1);
+    render_pixel(x, y + i, column >> i & 1);
 }
-int renderSmolChar(int x, int y, char c) {
-  #define RENDER_SMOL_COL(n, col) renderSmolColumn(x + n, y, col);
+int render_smol_char(int x, int y, char c) {
+  #define RENDER_SMOL_COL(n, col) render_smol_column(x + n, y, col);
   #define SMOL_CHAR_PIXELS_1(ch, col0) case ch: RENDER_SMOL_COL(0, col0); return 1;
   #define SMOL_CHAR_PIXELS_2(ch, col0, col1) case ch: RENDER_SMOL_COL(0, col0); RENDER_SMOL_COL(1, col1); return 2;
   #define SMOL_CHAR_PIXELS_3(ch, col0, col1, col2) case ch: RENDER_SMOL_COL(0, col0); RENDER_SMOL_COL(1, col1); RENDER_SMOL_COL(2, col2); return 3;
@@ -294,11 +294,14 @@ int renderSmolChar(int x, int y, char c) {
     SMOL_CHAR_PIXELS_3('0', 0b11111,
                             0b10001,
                             0b11111)
-    SMOL_CHAR_PIXELS_1('1', 0b11111)
+    SMOL_CHAR_PIXELS_3('1', 0b00000,
+                            0b00000,
+                            0b11111)
     SMOL_CHAR_PIXELS_3('2', 0b11101,
                             0b10101,
                             0b10111)
-    SMOL_CHAR_PIXELS_2('3', 0b10101,
+    SMOL_CHAR_PIXELS_3('3', 0b10101,
+                            0b10101,
                             0b11111)
     SMOL_CHAR_PIXELS_3('4', 0b00111,
                             0b00100,
@@ -309,14 +312,19 @@ int renderSmolChar(int x, int y, char c) {
     SMOL_CHAR_PIXELS_3('6', 0b11111,
                             0b10101,
                             0b11101)
-    SMOL_CHAR_PIXELS_2('7', 0b00001,
-                            0b11111)
+    SMOL_CHAR_PIXELS_3('7', 0b00001,
+                            0b11001,
+                            0b00111)
     SMOL_CHAR_PIXELS_3('8', 0b11111,
                             0b10101,
                             0b11111)
     SMOL_CHAR_PIXELS_3('9', 0b10111,
                             0b10101,
                             0b11111)
+    // fat minus (same width as plus)
+    SMOL_CHAR_PIXELS_3(0x02, 0b00100,
+                             0b00100,
+                             0b00100)
 
     default:
       RENDER_SMOL_COL(0, 0b11111);
@@ -324,21 +332,21 @@ int renderSmolChar(int x, int y, char c) {
       return 2;
   }
 }
-int renderSmolText(int x, int y, String text) {
+int render_smol_text(int x, int y, String text) {
   for (int i = 0; i < text.length(); i++) {
     if (i > 0) x += 1;
-    x += renderSmolChar(x, y, text[i]);
+    x += render_smol_char(x, y, text[i]);
   }
   return x;
 }
 
-void renderTinyColumn(int x, int y, uint8_t column) {
+void render_tiny_column(int x, int y, uint8_t column) {
   for (int i = 0; i < 3; i++)
-    renderPixel(x, y + i, column >> i & 1);
+    render_pixel(x, y + i, column >> i & 1);
 }
 
-int renderTinyChar(int x, int y, char c) {
-  #define RENDER_TINY_COL(n, col) renderTinyColumn(x + n, y, col);
+int render_tiny_char(int x, int y, char c) {
+  #define RENDER_TINY_COL(n, col) render_tiny_column(x + n, y, col);
   #define TINY_CHAR_PIXELS_1(ch, col0) case ch: RENDER_TINY_COL(0, col0); return 1;
   #define TINY_CHAR_PIXELS_3(ch, col0, col1, col2) case ch: RENDER_TINY_COL(0, col0); RENDER_TINY_COL(1, col1); RENDER_TINY_COL(2, col2); return 3;
 
@@ -361,10 +369,10 @@ int renderTinyChar(int x, int y, char c) {
       return 2;
   }
 }
-int renderTinyText(int x, int y, String text) {
+int render_tiny_text(int x, int y, String text) {
   for (int i = 0; i < text.length(); i++) {
     if (i > 0) x += 1;
-    x += renderTinyChar(x, y, text[i]);
+    x += render_tiny_char(x, y, text[i]);
   }
   return x;
 }
