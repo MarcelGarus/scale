@@ -79,7 +79,8 @@ void setup_load_cells() {
 
 // Rendering
 #define DISPLAY_WIDTH 128
-uint8_t pixels[DISPLAY_WIDTH];
+#define DISPLAY_HEIGHT 8
+uint8_t pixels[DISPLAY_WIDTH]; // Each entry is 8 bits for an entire column
 
 void show_pixels() {
   display_left.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
@@ -137,6 +138,8 @@ void shift_pixels() {
   }
 }
 
+float clamp(float v, float low, float high) { return min(high, max(low, v)); }
+
 // Weight measuring.
 struct Weight {
   float front_left;
@@ -154,9 +157,9 @@ struct Weight {
     return res;
   }
   // 0 = left, 1 = right
-  float center_of_mass_x() { return (front_right + back_right) / total(); }
+  float center_of_mass_x() { return clamp((front_right + back_right) / total(), 0, 1); }
   // 0 = front, 1 = back
-  float center_of_mass_y() { return (back_left + back_right) / total(); }
+  float center_of_mass_y() { return clamp((back_left + back_right) / total(), 0, 1); }
 };
 typedef struct Weight Weight;
 
@@ -237,14 +240,21 @@ void loop() {
   float fluctuation = stable.diff_to(current).total();
   s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation));
   // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
-  // render_smol_text(1, 2, s);
+  render_smol_text(1, 2, s);
   // render_smol_text(1, 0, "RUCKSACK, LAPTOP, IPAD, 900ML WASSER");
   // int len = render_smol_text(1, int(fluctuation / 10.), "KAL?");
   // render_tiny_text(0, 0, "123456789");
-  render_smol_text(1, 2, String(current.total()));
+  // render_smol_text(1, 2, String(current.total()));
 
   if (fluctuation > 5) {
-    render_pixel(int(stable.diff_to(current).center_of_mass_x() * DISPLAY_WIDTH), 0, true);
+    int x = int(stable.diff_to(current).center_of_mass_x() * DISPLAY_WIDTH);
+    x = clamp(x, 0, DISPLAY_WIDTH - 1);
+    Serial.println("x is " + String(x));
+    int y = int(stable.diff_to(current).center_of_mass_y() * DISPLAY_HEIGHT);
+    y = clamp(y, 0, DISPLAY_HEIGHT - 1);
+    render_pixel(x, 0, true);
+  // } else {
+    // Serial.println("fluctuation is " + String(fluctuation));
   }
   // shift_pixels();
   show_pixels();
