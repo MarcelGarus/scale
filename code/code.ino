@@ -1,16 +1,25 @@
+// TODO: Refactor to use snake case
+
 #include <MD_MAX72xx.h>
 #include <HX711.h>
 #include <SPI.h>
 
+// Cable colors:
+// - red: positive
+// - brown/blue: ground/negative
+// - green: display clock
+// - yellow: display control (CS)
+// - orange: display data
+
 // First display: MD_MAX72XX
-#define DISPLAY_1_CLK_PIN   13
-#define DISPLAY_1_DATA_PIN  12
-#define DISPLAY_1_CS_PIN    11
+#define DISPLAY_1_CLK_PIN   10
+#define DISPLAY_1_DATA_PIN  8
+#define DISPLAY_1_CS_PIN    9
 
 // Second display: MD_MAX72XX
-#define DISPLAY_2_CLK_PIN   10
-#define DISPLAY_2_DATA_PIN  9
-#define DISPLAY_2_CS_PIN    8
+#define DISPLAY_2_CLK_PIN   13
+#define DISPLAY_2_DATA_PIN  11
+#define DISPLAY_2_CS_PIN    12
 
 // Load cell: HX711
 #define LC_DATA_PIN 6
@@ -29,12 +38,12 @@ MD_MAX72XX display2 = MD_MAX72XX(MD_MAX72XX::PAROLA_HW, DISPLAY_2_DATA_PIN, DISP
 
 void setupDisplays() {
   display1.begin();
-  display1.control(MD_MAX72XX::INTENSITY, MAX_INTENSITY);
+  display1.control(MD_MAX72XX::INTENSITY, MAX_INTENSITY / 4);
   display1.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
   display1.clear();
 
   display2.begin();
-  display2.control(MD_MAX72XX::INTENSITY, 0x0);
+  display2.control(MD_MAX72XX::INTENSITY, MAX_INTENSITY / 4);
   display2.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
   display2.clear();
 }
@@ -54,13 +63,32 @@ uint8_t pixels[DISPLAY_WIDTH];
 
 void pushPixelsToDisplays() {
   display1.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-  for (int i = 0; i < DISPLAY_WIDTH / 2; i++)
-    display1.setColumn(i / 8 * 8 + 7 - (i % 8), pixels[i]);
-  display1.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-
   display2.control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-  for (int i = DISPLAY_WIDTH / 2; i < DISPLAY_WIDTH; i++)
-    display2.setColumn(i % (DISPLAY_WIDTH / 2) / 8 * 8 + 7 - (i % 8), pixels[i]);
+
+  for (int x = 0; x < DISPLAY_WIDTH; x++) {
+    if (x < DISPLAY_WIDTH / 2) {
+      // Print on left display. It consists of 8x8 blocks and the columns are
+      // are addressed in a weird way:
+      // 7 6 5 4 3 2 1 0 15 14 13 12 11 10 9 8 ...
+      int mapped_x = x / 8 * 8 + 7 - (x % 8);
+      //             ^^^^^^^^^   ^^^^^^^^^^^
+      //             in which    offset in
+      //             block?      block
+      display1.setColumn(mapped_x, pixels[x]);
+    } else {
+      // Print on right display. This is flipped upside down so that the
+      // connector is on the right, so the column bits need to be flipped.
+      // It uses the same weird block-based addressing.
+      int x_in_right = DISPLAY_WIDTH / 2 - (x % (DISPLAY_WIDTH / 2)) - 1;
+      int mapped_x = x_in_right / 8 * 8 + 7 - (x_in_right % 8);
+      // TODO: explain
+      int flipped = 0;
+      for (int j = 0; j < 8; j++) flipped |= (pixels[x] >> j & 1) << (7 - j);
+      display2.setColumn(mapped_x, flipped);
+    }
+  }
+
+  display1.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
   display2.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 void clearPixels() {
@@ -105,6 +133,14 @@ void setup() {
 
 void loop() {
   unsigned long now = millis();
+
+  Serial.println("Updating " + String(now));
+  clearPixels();
+  renderSmolText(1, 1, "HALLI HALLO DAS IST EIN TEST");
+  pushPixelsToDisplays();
+
+  return;
+
   float weight = scale.get_units(1);
 
   update(now, weight);
@@ -120,9 +156,9 @@ void loop() {
   float fluctuation = weight - stableWeight;
   s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation)) + "g";
   // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
-  s += " and some more text";
-  renderText(1, 0, s);
-  // renderText(1, 0, "iPad \x3, 900ml Wasser");
+  s += " AND SOME MORE TEXT";
+  // renderSmolText(1, 0, s);
+  renderSmolText(1, 0, "RUCKSACK, LAPTOP, IPAD, 900ML WASSER");
   // int len = renderSmolText(1, int(fluctuation / 10.), "KAL?");
   // renderTinyText(0, 0, "123456789");
   // renderTinyText(0, 5, String(weight));
