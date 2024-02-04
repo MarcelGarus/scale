@@ -170,6 +170,19 @@ struct Weight {
 };
 typedef struct Weight Weight;
 
+// Sinus curve from 0 to 1 (useful for animation).
+#define PI 3.14159265358979323846
+float ease_out(float t) {
+  if (t <= 0.0) return 0.0;
+  if (t >= 1.0) return 1.0;
+  return sin(t * PI / 2);
+}
+float ease_in_out(float t) {
+  if (t <= 0.0) return 0.0;
+  if (t >= 1.0) return 1.0;
+  return (1.0 - cos(t * PI)) / 2.0;
+}
+
 // Main program.
 
 unsigned long now;
@@ -270,7 +283,7 @@ struct Standby {
   // DoubleTapDetector calibrate_gesture;
 
   void tick() {
-    if (abs(wood_plate.diff_to(current).total()) > 10) switch_to(mode_measure);
+    if (abs(wood_plate.diff_to(current).total()) > 10) return switch_to(mode_measure);
 
     clear_pixels();
     show_pixels();
@@ -279,18 +292,51 @@ struct Standby {
 
 // Measure mode.
 struct Measure {
-  TapDetector tare_gesture;
+  Button tare_button;
 
   void tick() {
     float weight_on_wood_plate = wood_plate.diff_to(current).total();
-    if (abs(weight_on_wood_plate) < 10) switch_to(mode_standby);
+    if (abs(weight_on_wood_plate) < 10) return switch_to(mode_standby);
+    if (abs(weight_on_wood_plate) > 1480) return switch_to(mode_tea); // TODO: only when in measure mode for short amount of time
 
-    tare_gesture.tick();
+    tare_button.tick();
 
     clear_pixels();
     render_smol_text(0, 2, String(round(weight_on_wood_plate)));
     render_smol_text(113, 2, "TARE");
-    if (tare_gesture.tapped) render_smol_text(80, 2, "Hi");
+    if (tare_button.tapped) render_smol_text(80, 2, "Hi");
+    show_pixels();
+  }
+};
+
+// Tea mode.
+struct Tea {
+  unsigned long brew_start = 0; // 0 = hasn't started, otherwise timestamp
+
+  void tick() {
+    Weight weight_on_wood_plate = wood_plate.diff_to(current);
+
+    if (weight_on_wood_plate.total() < 20) return switch_to(mode_measure);
+
+    float brew_where = weight_on_wood_plate.center_of_mass_x();
+    if (brew_start == 0 && weight_on_wood_plate.total() > 1800) {
+      brew_start = now;
+    }
+
+    clear_pixels();
+    render_smol_text(0, 2, "TEE");
+
+    if (brew_start > 0) {
+      unsigned long diff_in_seconds = (now - brew_start) / 1000;
+      unsigned long display_minutes = diff_in_seconds / 60;
+      unsigned long display_seconds = diff_in_seconds % 60;
+      render_smol_text(
+        60, // clamp(DISPLAY_WIDTH * brew_where, 0, DISPLAY_WIDTH - 1),
+        round((1.0 - ease_out(float(now - brew_start) / 400.0)) * (-7.0) + 2.0),
+        String(display_minutes) + ":" + (display_seconds < 10 ? "0" : "") + String(display_seconds)
+      );
+    }
+
     show_pixels();
   }
 };
@@ -298,15 +344,18 @@ struct Measure {
 union State {
   Standby standby;
   Measure measure;
+  Tea tea;
 };
 Mode mode = mode_standby;
 State state = {};
 
-void init_state() { state.standby = Standby(); }
+void init_state() { switch_to(mode_standby); }
 void switch_to(int m) {
+  Serial.println("Switching to mode " + String(m));
   mode = m;
   if (mode == mode_standby) state.standby = Standby();
   if (mode == mode_measure) state.measure = Measure();
+  if (mode == mode_tea)     state.tea = Tea();
 }
 
 void loop() {
@@ -317,6 +366,7 @@ void loop() {
 
   if (mode == mode_standby) state.standby.tick();
   if (mode == mode_measure) state.measure.tick();
+  if (mode == mode_tea)     state.tea.tick();
   return;
 }
 

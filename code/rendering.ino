@@ -207,7 +207,8 @@ int render_smol_char(int x, int y, char c) {
     SMOL_CHAR_PIXELS_3('D', 0b11111,
                             0b10001,
                             0b01110)
-    SMOL_CHAR_PIXELS_2('E', 0b11111,
+    SMOL_CHAR_PIXELS_3('E', 0b11111,
+                            0b10101,
                             0b10101)
     SMOL_CHAR_PIXELS_2('F', 0b11111,
                             0b00101)
