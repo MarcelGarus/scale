@@ -45,6 +45,8 @@ MD_MAX72XX display_right = MD_MAX72XX(MD_MAX72XX::PAROLA_HW,
   DISPLAY_RIGHT_DATA_PIN, DISPLAY_RIGHT_CLK_PIN, DISPLAY_RIGHT_CS_PIN, 12);
 
 void setup_displays() {
+  Serial.println("Setting up displays.");
+
   display_left.begin();
   display_left.control(MD_MAX72XX::INTENSITY, MAX_INTENSITY / 4);
   display_left.control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
@@ -63,15 +65,20 @@ HX711 lc_back_left;
 HX711 lc_back_right;
 
 void setup_load_cells() {
+  Serial.println("Setting up load cells.");
+  
   lc_front_left.begin(LC_FRONT_LEFT_DATA_PIN, LC_FRONT_LEFT_SCK_PIN);
   lc_front_left.set_offset(-19500);
   lc_front_left.set_scale(200.8);
+
   lc_front_right.begin(LC_FRONT_RIGHT_DATA_PIN, LC_FRONT_RIGHT_SCK_PIN);
   lc_front_right.set_offset(90200);
   lc_front_right.set_scale(200.8);
+
   lc_back_left.begin(LC_BACK_LEFT_DATA_PIN, LC_BACK_LEFT_SCK_PIN);
   lc_back_left.set_offset(-162800);
   lc_back_left.set_scale(187.4);
+
   lc_back_right.begin(LC_BACK_RIGHT_DATA_PIN, LC_BACK_RIGHT_SCK_PIN);
   lc_back_right.set_offset(-245700);
   lc_back_right.set_scale(200.8);
@@ -165,14 +172,18 @@ typedef struct Weight Weight;
 
 // Main program.
 
+unsigned long now;
 Weight current;
-Weight stable;
-Weight candidate;
-unsigned long candidate_when = 0;
+Weight wood_plate;
 
-#define MAX_THINGS 128
-float things[MAX_THINGS];
-int num_things = 0;
+enum Mode {
+  mode_standby,
+  mode_measure,
+  mode_backpack,
+  mode_tea,
+  mode_cooking,
+  mode_calibrate
+};
 
 void setup() {
   setup_pins();
@@ -180,133 +191,138 @@ void setup() {
   setup_displays();
   setup_load_cells();
 
+  Serial.print("Front left...  ");
   lc_front_left.wait_ready(1);
+  Serial.println("done");
+
+  Serial.print("Front right... ");
   lc_front_right.wait_ready(1);
+  Serial.println("done");
+
+  Serial.print("Back left...   ");
   lc_back_left.wait_ready(1);
-  lc_back_right.wait_ready(1);
+  Serial.println("done");
+
+  Serial.print("Back right...  ");
+  // lc_back_right.wait_ready(1); // TODO
+  Serial.println("skipped");
+  
   update_current();
-  stable = current;
+  wood_plate = current;
+  Serial.println("Done with setup.");
+
+  init_state();
+}
+void update_current() {
+  if (lc_front_left.is_ready())  current.front_left = lc_front_left.get_units(1);
+  if (lc_front_right.is_ready()) current.front_right = lc_front_right.get_units(1);
+  if (lc_back_left.is_ready())   current.back_left = lc_back_left.get_units(1);
+  if (lc_back_right.is_ready())  current.back_right = lc_back_right.get_units(1);
 }
 
-void update_current() {
-  // unsigned long time_a = millis();
+// Detects taps on the right side. A tap is a rapid adding and removing of
+// weight.
+struct Button {
+  Weight previous; // TODO: allow increase over multiple ticks
+  unsigned long tap_down = 0; // 0 = not occurred, otherwise timestamp
+  Weight tapped_down;
+  bool tapped = false;
 
-  // Serial.print("Measuring front left...  ");
-  if (lc_front_left.is_ready())
-    current.front_left = lc_front_left.get_units(1);
-  // unsigned long time_b = millis();
-  // Serial.println("took " + String(time_b - time_a) + " ms.");
+  Button() {
+    previous = current;
+  }
 
-  // Serial.print("Measuring front right... ");
-  if (lc_front_right.is_ready())
-    current.front_right = lc_front_right.get_units(1);
-  // unsigned long time_c = millis();
-  // Serial.println("took " + String(time_c - time_b) + " ms.");
+  void tick() {
+    Weight prev = previous;
+    previous = current;
 
-  // Serial.print("Measuring back left...   ");
-  if (lc_back_left.is_ready())
-    current.back_left = lc_back_left.get_units(1);
-  // unsigned long time_d = millis();
-  // Serial.println("took " + String(time_d - time_c) + " ms.");
+    if (tapped) return;
 
-  // Serial.print("Measuring back right...  ");
-  if (lc_back_right.is_ready())
-    current.back_right = lc_back_right.get_units(1);
-  // unsigned long time_e = millis();
-  // Serial.println("took " + String(time_e - time_d) + " ms.");
+    if (tap_down > 0) {
+      if (now - tap_down > 1000) {
+        // not released for a second, abort tap
+        Serial.println("tap not released for a second, abort");
+        tap_down = 0;
+        return;
+      }
+      if (current.front_right < tapped_down.front_right - 10) {
+        // tap up occurred
+        tapped = true;
+        return;
+      }
+      // tapped down, but not up yet
+      Serial.println("tap is still holding");
+      return;
+    }
+
+    if (current.front_right > prev.front_right + 10
+      && abs(current.total() - prev.total()) < 15
+    ) {
+      Serial.println("tap started");
+      tap_down = now;
+      tapped_down = current;
+    }
+  }
+};
+
+// Standby mode.
+struct Standby {
+  // DoubleTapDetector calibrate_gesture;
+
+  void tick() {
+    if (abs(wood_plate.diff_to(current).total()) > 10) switch_to(mode_measure);
+
+    clear_pixels();
+    show_pixels();
+  }
+};
+
+// Measure mode.
+struct Measure {
+  TapDetector tare_gesture;
+
+  void tick() {
+    float weight_on_wood_plate = wood_plate.diff_to(current).total();
+    if (abs(weight_on_wood_plate) < 10) switch_to(mode_standby);
+
+    tare_gesture.tick();
+
+    clear_pixels();
+    render_smol_text(0, 2, String(round(weight_on_wood_plate)));
+    render_smol_text(113, 2, "TARE");
+    if (tare_gesture.tapped) render_smol_text(80, 2, "Hi");
+    show_pixels();
+  }
+};
+
+union State {
+  Standby standby;
+  Measure measure;
+};
+Mode mode = mode_standby;
+State state = {};
+
+void init_state() { state.standby = Standby(); }
+void switch_to(int m) {
+  mode = m;
+  if (mode == mode_standby) state.standby = Standby();
+  if (mode == mode_measure) state.measure = Measure();
 }
 
 void loop() {
-  unsigned long now = millis();
-
-  Serial.println("Updating " + String(now));
-  // clearPixels();
-  // renderSmolText(1, 1, "HALLI HALLO DAS IST EIN TEST");
-  // pushPixelsToDisplays();
-
-  // return;
+  now = millis();
+  // Serial.println("Tick " + String(now));
 
   update_current();
-  update(now);
 
-  clear_pixels();
-  // render_text(15, 0, "0123456789");
-  // render_text(15, 0, "Gewicht: 2g");
-  // render_text(8, 0, "Rucksack");
-  String s = "";
-  for (int i = 0; i < num_things; i++) {
-    s += (i == 0 ? "" : "+") + String(round(things[i]));
-  }
-  float fluctuation = stable.diff_to(current).total();
-  s += (fluctuation >= 0 ? "+" : "\x2") + String(abs(fluctuation));
-  // int offset = int((sin(float(millis()) / 400.0) + 1) * 30);
-  render_smol_text(1, 2, s);
-  // render_smol_text(1, 0, "RUCKSACK, LAPTOP, IPAD, 900ML WASSER");
-  // int len = render_smol_text(1, int(fluctuation / 10.), "KAL?");
-  // render_tiny_text(0, 0, "123456789");
-  // render_smol_text(1, 2, String(current.total()));
-
-  if (fluctuation > 5) {
-    int x = int(stable.diff_to(current).center_of_mass_x() * DISPLAY_WIDTH);
-    x = clamp(x, 0, DISPLAY_WIDTH - 1);
-    Serial.println("x is " + String(x));
-    int y = int(stable.diff_to(current).center_of_mass_y() * DISPLAY_HEIGHT);
-    y = clamp(y, 0, DISPLAY_HEIGHT - 1);
-    render_pixel(x, 0, true);
-  // } else {
-    // Serial.println("fluctuation is " + String(fluctuation));
-  }
-  // shift_pixels();
-  show_pixels();
+  if (mode == mode_standby) state.standby.tick();
+  if (mode == mode_measure) state.measure.tick();
+  return;
 }
 
-void update(unsigned long now) {
-  Weight delta = stable.diff_to(current);
-
-  if (abs(candidate.diff_to(current).total()) > 5) {
-    // This is a bad candidate, it didn't last for a second.
-    candidate = current;
-    candidate_when = now;
-    return;
-  }
-
-  if (now - candidate_when < 1000) {
-    // Wait some more time to see if something disproves the candidate.
-    return;
-  }
-
-  // The candidate was good for one whole second.
-  // Let's pick it!
-  stable = candidate;
-  candidate = current;
-  candidate_when = now;
-
-  // We know that the delta was put on (or removed from) the scale.
-  if (abs(delta.total()) < 10) {
-    // Just fluctuation. Perhaps the load cell slightly shifts over time because of temperature changes.
-    return;
-  }
-
-  Serial.println(String(delta.total()) + " put on the scale.");
-
-  if (delta.total() > 0) {
-    // Something was put on the scale.
-    if (num_things > MAX_THINGS) {
-      return; // Too bad.
-    }
-    things[num_things] = delta.total();
-    num_things++;
-  } else {
-    // Something was taken from the scale.
-    float removed = -delta.total();
-    int thing = -1;
-    for (int i = 0; i < num_things; i++)
-      if (thing == -1 || abs(things[i] - removed) < abs(things[thing] - removed))
-        thing = i;
-    if (thing == -1) return; // Nothing was on the scale.
-
-    for (int i = thing + 1; i < num_things; i++)
-      things[i - 1] = things[i];
-    num_things--;
-  }
-}
+struct DoubleTapDetector {
+  unsigned long first_tap_down = 0; // 0 = not occurred, otherwise timestamp
+  unsigned long first_tap_up   = 0; // 0 = not occurred, otherwise timestamp
+  unsigned long second_tap     = 0; // 0 = not occurred, otherwise timestamp
+};
+void tick_double_tap_detector(struct DoubleTapDetector* state) {}
