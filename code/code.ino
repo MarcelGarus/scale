@@ -221,16 +221,18 @@ void setup() {
   Serial.println("skipped");
   
   update_current();
+  delay(500);
+  update_current();
   wood_plate = current;
   Serial.println("Done with setup.");
 
   init_state();
 }
 void update_current() {
-  if (lc_front_left.is_ready())  current.front_left = lc_front_left.get_units(1);
+  if (lc_front_left.is_ready())  current.front_left  = lc_front_left.get_units(1);
   if (lc_front_right.is_ready()) current.front_right = lc_front_right.get_units(1);
-  if (lc_back_left.is_ready())   current.back_left = lc_back_left.get_units(1);
-  if (lc_back_right.is_ready())  current.back_right = lc_back_right.get_units(1);
+  if (lc_back_left.is_ready())   current.back_left   = lc_back_left.get_units(1);
+  if (lc_back_right.is_ready())  current.back_right  = lc_back_right.get_units(1);
 }
 
 // Detects taps on the right side. A tap is a rapid adding and removing of
@@ -283,7 +285,7 @@ struct Standby {
   // DoubleTapDetector calibrate_gesture;
 
   void tick() {
-    if (abs(wood_plate.diff_to(current).total()) > 10) return switch_to(mode_measure);
+    if (abs(wood_plate.diff_to(current).total()) > 15) return switch_to(mode_measure);
 
     clear_pixels();
     show_pixels();
@@ -297,7 +299,7 @@ struct Measure {
   void tick() {
     float weight_on_wood_plate = wood_plate.diff_to(current).total();
     if (abs(weight_on_wood_plate) < 10) return switch_to(mode_standby);
-    if (abs(weight_on_wood_plate) > 1480) return switch_to(mode_tea); // TODO: only when in measure mode for short amount of time
+    if (abs(weight_on_wood_plate) > 1220) return switch_to(mode_tea); // TODO: only when in measure mode for short amount of time
 
     tare_button.tick();
 
@@ -319,7 +321,7 @@ struct Tea {
     if (weight_on_wood_plate.total() < 20) return switch_to(mode_measure);
 
     float brew_where = weight_on_wood_plate.center_of_mass_x();
-    if (brew_start == 0 && weight_on_wood_plate.total() > 1800) {
+    if (brew_start == 0 && weight_on_wood_plate.total() > 1500) {
       brew_start = now;
     }
 
@@ -331,7 +333,7 @@ struct Tea {
       unsigned long display_minutes = diff_in_seconds / 60;
       unsigned long display_seconds = diff_in_seconds % 60;
       render_smol_text(
-        60, // clamp(DISPLAY_WIDTH * brew_where, 0, DISPLAY_WIDTH - 1),
+        59, // clamp(DISPLAY_WIDTH * brew_where, 0, DISPLAY_WIDTH - 1),
         round((1.0 - ease_out(float(now - brew_start) / 400.0)) * (-7.0) + 2.0),
         String(display_minutes) + ":" + (display_seconds < 10 ? "0" : "") + String(display_seconds)
       );
