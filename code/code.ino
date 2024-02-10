@@ -5,22 +5,22 @@
 #include <SPI.h>
 
 // Displays: MD_MAX72XX
-#define DISPLAY_LEFT_CLK_PIN   10
-#define DISPLAY_LEFT_DATA_PIN  8
-#define DISPLAY_LEFT_CS_PIN    9
-#define DISPLAY_RIGHT_CLK_PIN  13
-#define DISPLAY_RIGHT_DATA_PIN 11
-#define DISPLAY_RIGHT_CS_PIN   12
+#define DISPLAY_LEFT_CLK_PIN   A2
+#define DISPLAY_LEFT_DATA_PIN  A0
+#define DISPLAY_LEFT_CS_PIN    A1
+#define DISPLAY_RIGHT_CLK_PIN  A5
+#define DISPLAY_RIGHT_DATA_PIN A3
+#define DISPLAY_RIGHT_CS_PIN   A4
 
 // Load cells: HX711
-#define LC_FRONT_LEFT_DATA_PIN  2
-#define LC_FRONT_LEFT_SCK_PIN   3
-#define LC_FRONT_RIGHT_DATA_PIN 4
-#define LC_FRONT_RIGHT_SCK_PIN  5
-#define LC_BACK_LEFT_DATA_PIN   A0
-#define LC_BACK_LEFT_SCK_PIN    A1
-#define LC_BACK_RIGHT_DATA_PIN  A2
-#define LC_BACK_RIGHT_SCK_PIN   A3
+#define LC_FRONT_LEFT_DATA_PIN  13
+#define LC_FRONT_LEFT_SCK_PIN   12
+#define LC_FRONT_RIGHT_DATA_PIN 3
+#define LC_FRONT_RIGHT_SCK_PIN  4
+#define LC_BACK_LEFT_DATA_PIN   10
+#define LC_BACK_LEFT_SCK_PIN    9
+#define LC_BACK_RIGHT_DATA_PIN  6
+#define LC_BACK_RIGHT_SCK_PIN   7
 
 void setup_pins() {
   // Because of pin shortage, we use some analog pins as digital pins.
@@ -29,6 +29,8 @@ void setup_pins() {
   pinMode(A1, INPUT_PULLUP);
   pinMode(A2, INPUT_PULLUP);
   pinMode(A3, INPUT_PULLUP);
+  pinMode(A4, INPUT_PULLUP);
+  pinMode(A5, INPUT_PULLUP);
 }
 
 // Serial
